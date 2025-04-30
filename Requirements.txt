@@ -1,0 +1,8 @@
+streamlit>=1.30.0
+streamlit-drawable-canvas>=0.9.3
+pytesseract
+pdf2image
+PyMuPDF
+pdfplumber
+pandas
+openpyxl
