@@ -26,7 +26,7 @@ for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "e
 
 if not st.session_state.is_authenticated:
     st.title("Prefab Parser for Singapore PPVC/Precast")
-    st.title("🔐 Login or Register")
+    st.text_area("🔐 Login or Register")
 
     tab1, tab2 = st.tabs(["Login", "Register"])
 
