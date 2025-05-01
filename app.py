@@ -11,7 +11,7 @@ import pytesseract
 from user_auth import init_user_db, authenticate_user
 from db_logger import init_db, log_event
 
-st.set_page_config(page_title="Prefab Parser for Singapore PPVC / Precast", layout="centered")
+st.set_page_config(page_title="Prefab Parser for Singapore PPVC/Precast", layout="centered")
 
 # Initialize databases
 init_user_db()
@@ -24,7 +24,8 @@ for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "e
 
 # Login
 
-if not st.session_state.is_authenticatedi:
+if not st.session_state.is_authenticated:
+    st.title("Prefab Parser for Singapore PPVC/Precast")
     st.title("🔐 Login or Register")
 
     tab1, tab2 = st.tabs(["Login", "Register"])
