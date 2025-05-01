@@ -13,6 +13,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS extraction_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_email TEXT,
             filename TEXT,
             file BLOB,
             method TEXT,
@@ -20,19 +21,21 @@ def init_db():
             feedback TEXT,
             feedback_type TEXT,
             timestamp TEXT
-        )
-    """)
+)
+""")
+
     conn.commit()
     conn.close()
 
-def log_event(filename, file_bytes, method, count, feedback, feedback_type):
+def log_event(user_email, filename, file_bytes, method, count, feedback, feedback_type):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO extraction_logs 
-        (filename, file, method, component_count, feedback, feedback_type, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (user_email, filename, file, method, component_count, feedback, feedback_type, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
+        user_email,
         filename,
         file_bytes,
         method,
