@@ -11,6 +11,9 @@ import pytesseract
 from user_auth import init_user_db, authenticate_user
 from db_logger import init_db, log_event
 
+import requests
+import streamlit.components.v1 as components
+
 st.set_page_config(page_title="Prefab Parser for Singapore PPVC/Precast", layout="centered")
 
 # Initialize databases
@@ -21,6 +24,27 @@ init_db()
 for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "emoji_rating", "rated_method", "feedback_type", "show_toast"]:
     if key not in st.session_state:
         st.session_state[key] = None if key == "df" else False if key == "is_authenticated" else ""
+
+# Turnstile widget HTML
+    components.html(f"""
+        <form>
+            <div class="cf-turnstile" data-sitekey="{st.secrets['turnstile']['sitekey']}" data-callback="onCaptchaSuccess"></div>
+            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+            <script>
+            function onCaptchaSuccess(token) {{
+                const input = window.parent.document.querySelector('input[name=captcha_token]');
+                if (input) {{
+                    input.value = token;
+                }}
+            }}
+            </script>
+            <input type="hidden" name="captcha_token">
+        </form>
+    """, height=100)
+
+    # Capture CAPTCHA token from hidden field
+    captcha_token = st.text_input("Captcha Token", type="hidden", key="captcha_token")
+
 
 # Login
 
@@ -34,17 +58,31 @@ if not st.session_state.is_authenticated:
         login_email = st.text_input("Email", key="login_email")
         login_password = st.text_input("Password", type="password", key="login_password")
 
-        if st.button("Login"):
-            auth = authenticate_user(login_email, login_password)
-            if auth:
-                name, role = auth[0], auth[1]
-                st.session_state.is_authenticated = True
-                st.session_state.user_name = name
-                st.session_state.user_email = login_email
-                st.session_state.user_role = role
-                st.rerun()
+    if st.button("Login"):
+        if not captcha_token:
+            st.warning("⚠️ Please complete the CAPTCHA.")
+        else:
+            # Verify with Cloudflare Turnstile API
+            resp = requests.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data={
+                "secret": st.secrets["turnstile"]["secret"],
+                "response": captcha_token
+            })
+            result = resp.json()
+
+            if not result.get("success"):
+                st.error("❌ CAPTCHA verification failed.")
             else:
-                st.error("Invalid credentials.")
+                auth = authenticate_user(login_email, login_password)
+                if auth:
+                    name, role = auth[0], auth[1]
+                    st.session_state.is_authenticated = True
+                    st.session_state.user_name = name
+                    st.session_state.user_email = login_email
+                    st.session_state.user_role = role
+                    st.experimental_rerun()
+                else:
+                    st.error("Invalid credentials.")
+
 
     with tab2:
         from user_auth import add_user
@@ -53,14 +91,27 @@ if not st.session_state.is_authenticated:
         reg_password = st.text_input("Password", type="password", key="reg_pass")
 
         if st.button("Register"):
-            if reg_name and reg_email and reg_password:
-                try:
-                    add_user(reg_name, reg_email, "user", reg_password)
-                    st.success("🎉 Registration successful. Please log in.")
-                except Exception as e:
-                    st.error(f"⚠️ Error: {e}")
+            if not captcha_token:
+                st.warning("⚠️ Please complete the CAPTCHA.")
             else:
-                st.warning("Please fill in all fields.")
+                # Verify with Cloudflare Turnstile API
+                resp = requests.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data={
+                    "secret": st.secrets["turnstile"]["secret"],
+                    "response": captcha_token
+                })
+                result = resp.json()
+
+            if not result.get("success"):
+                st.error("❌ CAPTCHA verification failed.")
+            else:
+                if reg_name and reg_email and reg_password:
+                    try:
+                        add_user(reg_name, reg_email, "user", reg_password)
+                        st.success("🎉 Registration successful. Please log in.")
+                    except Exception as e:
+                        st.error(f"⚠️ Error: {e}")
+                else:
+                    st.warning("Please fill in all fields.")
 
     st.stop()
 
