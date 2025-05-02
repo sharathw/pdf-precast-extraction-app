@@ -55,6 +55,39 @@ def check_rate_limit():
             st.session_state.login_attempts = 0
     return True
 
+# Function to display footer with Lean Station logo
+def display_footer():
+    st.markdown("""---""")
+    cols = st.columns([1, 2, 1])
+    with cols[1]:
+        # CSS for the footer
+        st.markdown("""
+        <style>
+        .footer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+            opacity: 0.8;
+        }
+        .footer img {
+            height: 40px;
+            margin-right: 10px;
+        }
+        .footer a {
+            color: #FF5500;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        </style>
+        <div class="footer">
+            <img src="https://leanstation.com/wp-content/uploads/2020/08/cropped-logo-3-1.png" alt="Lean Station">
+            <a href="https://leanstation.com" target="_blank">Open Source Initiative</a>
+        </div>
+        """, unsafe_allow_html=True)
+
 # Login
 if not st.session_state.is_authenticated:
     st.title("Prefab Parser for Singapore PPVC/Precast")
@@ -110,7 +143,9 @@ if not st.session_state.is_authenticated:
                 st.error(f"⚠️ Error: {e}")
         else:
             st.warning("Please fill in all fields.")
-
+    
+    # Display footer on login page
+    display_footer()
     st.stop()
 
 # Logout button
@@ -311,3 +346,6 @@ if st.session_state.df is not None:
         st.dataframe(df_user_logs)
     except Exception as e:
         st.warning(f"Could not display history: {e}")
+
+    # Display footer at the bottom of every page
+    display_footer()
