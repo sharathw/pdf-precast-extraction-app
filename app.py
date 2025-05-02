@@ -52,6 +52,7 @@ for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "e
 captcha_token = st.text_input("", value="", key="captcha_token", label_visibility="collapsed")
 
 
+
 # Login
 if not st.session_state.is_authenticated:
     st.title("Prefab Parser for Singapore PPVC/Precast")
