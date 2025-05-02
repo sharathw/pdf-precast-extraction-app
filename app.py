@@ -26,21 +26,27 @@ for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "e
         st.session_state[key] = None if key == "df" else False if key == "is_authenticated" else ""
 
 # Turnstile widget HTML
-    components.html(f"""
-        <form>
-            <div class="cf-turnstile" data-sitekey="{st.secrets['turnstile']['sitekey']}" data-callback="onCaptchaSuccess"></div>
-            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-            <script>
-            function onCaptchaSuccess(token) {{
-                const input = window.parent.document.querySelector('input[name=captcha_token]');
-                if (input) {{
-                    input.value = token;
+    if "captcha_shown" not in st.session_state:
+        st.session_state.captcha_shown = False
+
+    if not st.session_state.captcha_shown:
+        components.html(f"""
+            <form>
+                <div class="cf-turnstile" data-sitekey="{st.secrets['turnstile']['sitekey']}" data-callback="onCaptchaSuccess"></div>
+                <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                <script>
+                function onCaptchaSuccess(token) {{
+                    const input = window.parent.document.querySelector('input[name=captcha_token]');
+                    if (input) {{
+                        input.value = token;
+                    }}
                 }}
-            }}
-            </script>
-            <input type="hidden" name="captcha_token">
-        </form>
-    """, height=100)
+                </script>
+                <input type="hidden" name="captcha_token">
+            </form>
+         """, height=100)
+        st.session_state.captcha_shown = True
+
 
 # Capture CAPTCHA token from injected field (visually hidden)
 captcha_token = st.text_input("", value="", key="captcha_token", label_visibility="collapsed")
@@ -137,6 +143,7 @@ if not st.session_state.is_authenticated:
 if st.button("Logout"):
     for key in st.session_state.keys():
         st.session_state[key] = None if key == "df" else False if key == "is_authenticated" else ""
+        st.session_state.captcha_shown = False
     st.rerun()
 
 st.title(f"Welcome, {st.session_state.user_name}!")
