@@ -7,9 +7,13 @@ import pdfplumber
 from pdf2image import convert_from_bytes
 from PIL import Image
 import pytesseract
+import sqlite3
+import hashlib
+import secrets
+import time
 
-from user_auth import init_user_db, authenticate_user
-from db_logger import init_db, log_event
+from user_auth import init_user_db, authenticate_user, add_user
+from db_logger import init_db, log_event, get_user_logs
 
 import requests
 import streamlit.components.v1 as components
@@ -20,37 +24,36 @@ st.set_page_config(page_title="Prefab Parser for Singapore PPVC/Precast", layout
 init_user_db()
 init_db()
 
-# Session state setup
-for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "emoji_rating", "rated_method", "feedback_type", "show_toast"]:
+# Session state setup with CSRF protection
+if "csrf_token" not in st.session_state:
+    st.session_state.csrf_token = secrets.token_hex(16)
+
+for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", 
+            "emoji_rating", "rated_method", "feedback_type", "show_toast", 
+            "login_attempts", "last_attempt_time"]:
     if key not in st.session_state:
-        st.session_state[key] = None if key == "df" else False if key == "is_authenticated" else ""
+        if key == "df":
+            st.session_state[key] = None
+        elif key == "is_authenticated":
+            st.session_state[key] = False
+        elif key == "login_attempts":
+            st.session_state[key] = 0
+        elif key == "last_attempt_time":
+            st.session_state[key] = 0
+        else:
+            st.session_state[key] = ""
 
-# Turnstile widget HTML
-    if "captcha_shown" not in st.session_state:
-        st.session_state.captcha_shown = False
-
-    if not st.session_state.captcha_shown:
-        components.html(f"""
-            <form>
-                <div class="cf-turnstile" data-sitekey="{st.secrets['turnstile']['sitekey']}" data-callback="onCaptchaSuccess"></div>
-                <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-                <script>
-                function onCaptchaSuccess(token) {{
-                    const input = window.parent.document.querySelector('input[name=captcha_token]');
-                    if (input) {{
-                        input.value = token;
-                    }}
-                }}
-                </script>
-                <input type="hidden" name="captcha_token">
-            </form>
-         """, height=100)
-        st.session_state.captcha_shown = True
-
-
-# Capture CAPTCHA token from injected field (visually hidden)
-st.session_state.captcha_token = st.session_state.get('captcha_token', '')
-
+# Rate limiting for login attempts
+def check_rate_limit():
+    current_time = time.time()
+    if st.session_state.login_attempts >= 5:
+        if current_time - st.session_state.last_attempt_time < 300:  # 5 minutes cooldown
+            remaining = 300 - (current_time - st.session_state.last_attempt_time)
+            st.error(f"Too many login attempts. Please try again in {int(remaining)} seconds.")
+            return False
+        else:
+            st.session_state.login_attempts = 0
+    return True
 
 # Login
 if not st.session_state.is_authenticated:
@@ -63,105 +66,15 @@ if not st.session_state.is_authenticated:
         login_email = st.text_input("Email", key="login_email")
         login_password = st.text_input("Password", type="password", key="login_password")
 
-    if st.button("Login"):
+        # Hidden field for CSRF protection
+        st.markdown(f'<input type="hidden" name="csrf_token" value="{st.session_state.csrf_token}">', unsafe_allow_html=True)
 
-    # Use session state token
-    captcha_token = st.session_state.get("captcha_token", "")
-
-    if not captcha_token:
-        st.warning("⚠️ Please complete the CAPTCHA.")
-        st.stop()
-    else:
-        # Verify CAPTCHA
-        import requests
-        resp = requests.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data={
-            "secret": st.secrets["turnstile"]["secret"],
-            "response": captcha_token
-        })
-        result = resp.json()
-        if not result.get("success"):
-            st.error("❌ CAPTCHA verification failed.")
-            st.stop()
-
-        if not captcha_token:
-            st.warning("⚠️ Please complete the CAPTCHA.")
-        else:
-            # Verify with Cloudflare Turnstile API
-            resp = requests.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data={
-                "secret": st.secrets["turnstile"]["secret"],
-                "response": captcha_token
-            })
-            result = resp.json()
-
-            if not result.get("success"):
-                st.error("❌ CAPTCHA verification failed.")
-            else:
-                auth = authenticate_user(login_email, login_password)
-                if auth:
-                    name, role = auth[0], auth[1]
-                    st.session_state.is_authenticated = True
-                    st.session_state.user_name = name
-                    st.session_state.user_email = login_email
-                    st.session_state.user_role = role
-                    st.experimental_rerun()
-                else:
-                    st.error("Invalid credentials.")
-
-
-    with tab2:
-        from user_auth import add_user
-        reg_name = st.text_input("Name")
-        reg_email = st.text_input("Email", key="reg_email")
-        reg_password = st.text_input("Password", type="password", key="reg_pass")
-
-        if st.button("Register"):
-            if not captcha_token:
-                st.warning("⚠️ Please complete the CAPTCHA.")
-            else:
-                # Verify with Cloudflare Turnstile API
-                resp = requests.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data={
-                    "secret": st.secrets["turnstile"]["secret"],
-                    "response": captcha_token
-                })
-                result = resp.json()
-
-            if not result.get("success"):
-                st.error("❌ CAPTCHA verification failed.")
-            else:
-                if reg_name and reg_email and reg_password:
-                    try:
-                        add_user(reg_name, reg_email, "user", reg_password)
-                        st.success("🎉 Registration successful. Please log in.")
-                    except Exception as e:
-                        st.error(f"⚠️ Error: {e}")
-                else:
-                    st.warning("Please fill in all fields.")
-
-    st.stop()
-
-    st.title("🔐 Login Required")
-    login_email = st.text_input("Email")
-    login_password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-
-    # Use session state token
-    captcha_token = st.session_state.get("captcha_token", "")
-
-    if not captcha_token:
-        st.warning("⚠️ Please complete the CAPTCHA.")
-        st.stop()
-    else:
-        # Verify CAPTCHA
-        import requests
-        resp = requests.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data={
-            "secret": st.secrets["turnstile"]["secret"],
-            "response": captcha_token
-        })
-        result = resp.json()
-        if not result.get("success"):
-            st.error("❌ CAPTCHA verification failed.")
+        if not check_rate_limit():
             st.stop()
+        st.session_state.login_attempts += 1
+        st.session_state.last_attempt_time = time.time()
 
         auth = authenticate_user(login_email, login_password)
         if auth:
@@ -170,27 +83,68 @@ if not st.session_state.is_authenticated:
             st.session_state.user_name = name
             st.session_state.user_email = login_email
             st.session_state.user_role = role
+            st.session_state.login_attempts = 0
             st.rerun()
         else:
             st.error("Invalid credentials.")
+
+
+    with tab2:
+        reg_name = st.text_input("Name")
+        reg_email = st.text_input("Email", key="reg_email")
+        reg_password = st.text_input("Password", type="password", key="reg_pass")
+        reg_confirm_password = st.text_input("Confirm Password", type="password")
+
+        if st.button("Register"):
+            if not check_rate_limit():
+                st.stop()
+
+        if reg_password != reg_confirm_password:
+                st.error("Passwords do not match.")
+        elif reg_name and reg_email and reg_password:
+            try:
+                add_user(reg_name, reg_email, "user", reg_password)
+                st.success("🎉 Registration successful. Please log in.")
+                st.session_state.login_attempts = 0
+            except Exception as e:
+                st.error(f"⚠️ Error: {e}")
+        else:
+            st.warning("Please fill in all fields.")
+
     st.stop()
 
 # Logout button
 if st.button("Logout"):
     for key in st.session_state.keys():
-        st.session_state[key] = None if key == "df" else False if key == "is_authenticated" else ""
-        st.session_state.captcha_shown = False
+        if key == "df":
+            st.session_state[key] = None
+        elif key == "is_authenticated":
+            st.session_state[key] = False
+        elif key == "csrf_token":
+            st.session_state[key] = secrets.token_hex(16)
+        else:
+            st.session_state[key] = ""
     st.rerun()
 
 st.title(f"Welcome, {st.session_state.user_name}!")
 
-# Admin Dashboard
+# Admin Dashboard with secure queries
 if st.session_state.user_role == "admin":
     st.header("🔧 Admin Dashboard: All User Uploads")
-    import sqlite3
     conn = sqlite3.connect("data/extraction_log.db")
-    df_logs = pd.read_sql_query("SELECT * FROM extraction_logs ORDER BY timestamp DESC", conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM extraction_logs ORDER BY timestamp DESC")
+    logs = cursor.fetchall()
     conn.close()
+
+    # Get column names
+    conn = sqlite3.connect("data/extraction_log.db")
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(extraction_logs)")
+    columns = [info[1] for info in cursor.fetchall()]
+    conn.close()
+
+    df_logs = pd.DataFrame(logs, columns=columns)
     st.dataframe(df_logs)
     st.download_button("📥 Download Log", df_logs.to_csv(index=False), "logs.csv", "text/csv")
     st.stop()
@@ -261,14 +215,15 @@ if uploaded_file:
             df = df.drop_duplicates().sort_values("Component Code").reset_index(drop=True)
             st.session_state.df = df
 
+            # Secure logging
             log_event(
                 user_email=st.session_state.user_email,
                 filename=uploaded_file.name,
-                file_bytes=uploaded_file.getvalue(),
                 method=method,
                 count=len(df),
                 feedback=None,
-                feedback_type=None
+                feedback_type=None,
+                file_bytes=uploaded_file.getvalue()
             )
 
             st.toast(f"✅ Extracted {len(df)} components using {method}.")
@@ -281,15 +236,19 @@ if st.session_state.df is not None:
     st.session_state.df.to_excel(towrite, index=False, sheet_name="Components")
     towrite.seek(0)
     if st.download_button("📥 Download Excel", towrite, "components_with_levels.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"):
-        log_event(
-            user_email=st.session_state.user_email,
-            filename=st.session_state.rated_method + "_download",
-            file_bytes=None,
-            method=st.session_state.rated_method or "unknown",
-            count=len(st.session_state.df),
-            feedback="📥 Downloaded Excel",
-            feedback_type="download"
-        )
+        try:
+            # Fix for NoneType + str issue
+            method_name = st.session_state.rated_method if st.session_state.rated_method else "unknown"
+            log_event(
+                user_email=st.session_state.user_email,
+                filename=f"{method_name}_download",  # Use f-string for safe concatenation
+                method=method_name,
+                count=len(st.session_state.df),
+                feedback="📥 Downloaded Excel",
+                feedback_type="download"
+            )
+        except Exception as e:
+            st.warning(f"Logging issue: {e}")
         st.toast("📦 Excel file downloaded successfully.")
 
     # Feedback
@@ -317,15 +276,19 @@ if st.session_state.df is not None:
     if st.session_state.show_toast:
         feedback = "👎" if st.session_state.feedback_type == "downvote" else emoji_map[st.session_state.emoji_rating]
         feedback_type = st.session_state.feedback_type
-        log_event(
-            user_email=st.session_state.user_email,
-            filename=st.session_state.rated_method + "_feedback",
-            file_bytes=None,
-            method=method,
-            count=len(st.session_state.df),
-            feedback=feedback,
-            feedback_type=feedback_type
-        )
+        try:
+            # Fix for NoneType + str issue
+            method_name = st.session_state.rated_method if st.session_state.rated_method else "unknown"
+            log_event(
+                user_email=st.session_state.user_email,
+                filename=f"{method_name}_feedback",  # Use f-string for safe concatenation
+                method=method,
+                count=len(st.session_state.df),
+                feedback=feedback,
+                feedback_type=feedback_type
+            )
+        except Exception as e:
+            st.warning(f"Logging issue: {e}")
         st.toast(f"You rated: {feedback} — Method: {method}")
         st.session_state.show_toast = False
 
@@ -337,16 +300,14 @@ if st.session_state.df is not None:
     elif st.session_state.feedback_type == "downvote":
         st.markdown("### Your Feedback: 👎 This method did not work well")
 
-    # Show user history
-    import sqlite3
-    conn = sqlite3.connect("data/extraction_log.db")
-    user_logs = pd.read_sql_query(
-        f"SELECT filename, method, component_count, timestamp, feedback FROM extraction_logs WHERE user_email = '{st.session_state.user_email}' ORDER BY timestamp DESC",
-        conn
-    )
-    conn.close()
-
-    st.markdown("### 📂 History")
-    
-    user_logs['timestamp'] = pd.to_datetime(user_logs['timestamp']).dt.strftime('%Y-%m-%d %H:%M')
-    st.dataframe(user_logs)
+   # Show user history with secure queries
+    try:
+        user_logs = get_user_logs(st.session_state.user_email)
+        df_user_logs = pd.DataFrame(user_logs, columns=["Events", "method", "components count", "timestamp", "Activity"])
+        
+        st.markdown("### 📂 History")
+        
+        df_user_logs['timestamp'] = pd.to_datetime(df_user_logs['timestamp']).dt.strftime('%Y-%m-%d %H:%M')
+        st.dataframe(df_user_logs)
+    except Exception as e:
+        st.warning(f"Could not display history: {e}")
