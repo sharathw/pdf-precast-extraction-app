@@ -42,8 +42,9 @@ for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "e
         </form>
     """, height=100)
 
-    # Capture CAPTCHA token from hidden field
-    captcha_token = st.text_input("Captcha Token", type="hidden", key="captcha_token")
+# Capture CAPTCHA token from injected field (visually hidden)
+captcha_token = st.text_input("", value="", key="captcha_token", label_visibility="collapsed")
+
 
 
 # Login
