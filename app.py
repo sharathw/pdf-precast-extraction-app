@@ -20,7 +20,7 @@ init_db()
 #creating admin user (run only once)
 from user_auth import init_user_db, add_user
 
-add_user("Admin", "admin@yourdomain.com", "yourSecurePassword", role="admin")
+add_user("Admin", "sharathw@duck.com", "ubuntu123", role="admin")
 
 # Session state setup
 for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "emoji_rating", "rated_method", "feedback_type", "show_toast"]:
