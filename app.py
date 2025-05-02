@@ -49,7 +49,7 @@ for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "e
 
 
 # Capture CAPTCHA token from injected field (visually hidden)
-captcha_token = st.text_input("CAPTCHA", key="captcha_token", label_visibility="hidden")
+captcha_token = st.text_input("", value="", key="captcha_token", label_visibility="collapsed")
 
 
 # Login
