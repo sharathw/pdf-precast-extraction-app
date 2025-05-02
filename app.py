@@ -49,8 +49,7 @@ for key in ["is_authenticated", "user_name", "user_email", "user_role", "df", "e
 
 
 # Capture CAPTCHA token from injected field (visually hidden)
-captcha_token = st.text_input("", value="", key="captcha_token", label_visibility="collapsed")
-
+st.session_state.captcha_token = st.session_state.get('captcha_token', '')
 
 
 # Login
@@ -65,6 +64,25 @@ if not st.session_state.is_authenticated:
         login_password = st.text_input("Password", type="password", key="login_password")
 
     if st.button("Login"):
+
+    # Use session state token
+    captcha_token = st.session_state.get("captcha_token", "")
+
+    if not captcha_token:
+        st.warning("⚠️ Please complete the CAPTCHA.")
+        st.stop()
+    else:
+        # Verify CAPTCHA
+        import requests
+        resp = requests.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data={
+            "secret": st.secrets["turnstile"]["secret"],
+            "response": captcha_token
+        })
+        result = resp.json()
+        if not result.get("success"):
+            st.error("❌ CAPTCHA verification failed.")
+            st.stop()
+
         if not captcha_token:
             st.warning("⚠️ Please complete the CAPTCHA.")
         else:
@@ -126,6 +144,25 @@ if not st.session_state.is_authenticated:
     login_password = st.text_input("Password", type="password")
 
     if st.button("Login"):
+
+    # Use session state token
+    captcha_token = st.session_state.get("captcha_token", "")
+
+    if not captcha_token:
+        st.warning("⚠️ Please complete the CAPTCHA.")
+        st.stop()
+    else:
+        # Verify CAPTCHA
+        import requests
+        resp = requests.post("https://challenges.cloudflare.com/turnstile/v0/siteverify", data={
+            "secret": st.secrets["turnstile"]["secret"],
+            "response": captcha_token
+        })
+        result = resp.json()
+        if not result.get("success"):
+            st.error("❌ CAPTCHA verification failed.")
+            st.stop()
+
         auth = authenticate_user(login_email, login_password)
         if auth:
             name, role = auth[0], auth[1]
