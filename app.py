@@ -213,7 +213,29 @@ def perform_azure_ocr(image_stream, client):
         for page in result.analyze_result.read_results:
             for line in page.lines:
                 extracted_text += line.text + "\n"
+    #debug
+   # st.text_area("🧾 Raw OCR Output", extracted_text, height=300)
+
     return extracted_text
+
+#perform OCR using OCR Space
+def ocr_space_file(file, api_key, language='eng'):
+    """ OCR.Space API request with local file """
+    payload = {
+        'isOverlayRequired': False,
+        'apikey': api_key,
+        'language': language,
+        'OCREngine': 2  # optional: use engine 1 or 2
+    }
+    r = requests.post(
+        'https://api.ocr.space/parse/image',
+        files={'file': file},
+        data=payload,
+    )
+    result = r.json()
+    if result.get("IsErroredOnProcessing") or "ParsedResults" not in result:
+        return ""
+    return result["ParsedResults"][0]["ParsedText"]
 
 def extract_component_with_levels(text):
     pairs = []
@@ -240,15 +262,26 @@ def extract_text(file, method):
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text + "\n"
+    
     elif method == "PyMuPDF":
         doc = fitz.open(stream=file.read(), filetype="pdf")
         for page in doc:
             text += page.get_text()
+    
     #elif method == "Tesseract OCR":
      #   images = convert_from_bytes(file.read())
       #  for img in images:
        #     text += pytesseract.image_to_string(img)
-    elif method == "Azure OCR":
+    
+    elif method == "OCR Space":
+        images = convert_from_bytes(file.read(), dpi=300)
+        for img in images:
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='PNG')
+            img_byte_arr.seek(0)
+            text += ocr_space_file(img_byte_arr, api_key=st.secrets["ocr_space"]["key"])
+
+    elif method == "Microsoft Azure OCR":
         AZURE_ENDPOINT = st.secrets["azure"]["endpoint"]
         AZURE_KEY = st.secrets["azure"]["key"]
         client = init_azure_client(AZURE_ENDPOINT, AZURE_KEY)
@@ -259,10 +292,7 @@ def extract_text(file, method):
             img.save(img_byte_arr, format='PNG')
             img_byte_arr.seek(0)
             text += perform_azure_ocr(img_byte_arr, client)
-            
-            #debug
-            st.text_area("🧾 Raw OCR Output", text, height=300)
-
+    
     return text
 
 if uploaded_file:
@@ -275,7 +305,7 @@ if uploaded_file:
         st.error(f"Preview failed: {e}")
     uploaded_file.seek(0)
 
-    method = st.radio("Choose extraction method", ["pdfplumber", "PyMuPDF", "Microsoft Azure OCR"])
+    method = st.radio("Choose extraction method", ["pdfplumber", "PyMuPDF", "OCR Space", "Microsoft Azure OCR"])
     if method != st.session_state.rated_method:
         st.session_state.emoji_rating = 0
         st.session_state.feedback_type = None
