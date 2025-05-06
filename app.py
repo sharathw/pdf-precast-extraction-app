@@ -259,8 +259,8 @@ def extract_text(file, method):
             img.save(img_byte_arr, format='PNG')
             img_byte_arr.seek(0)
             text += perform_azure_ocr(img_byte_arr, client)
+            
             #debug
-            text = extract_text(uploaded_file, selected_method)
             st.text_area("🧾 Raw OCR Output", text, height=300)
 
     return text
