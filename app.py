@@ -12,6 +12,9 @@ import hashlib
 import secrets
 import time
 
+from azure.cognitiveservices.vision.computervision import ComputerVisionClient
+from msrest.authentication import CognitiveServicesCredentials
+
 from user_auth import init_user_db, authenticate_user, add_user
 from db_logger import init_db, log_event, get_user_logs
 
@@ -23,6 +26,10 @@ st.set_page_config(page_title="Prefab Parser for Singapore PPVC/Precast", layout
 # Initialize databases
 init_user_db()
 init_db()
+
+# Initialize the Azure OCR client
+def init_azure_client(endpoint, key):
+    return ComputerVisionClient(endpoint, CognitiveServicesCredentials(key))
 
 # Session state setup with CSRF protection
 if "csrf_token" not in st.session_state:
@@ -189,6 +196,26 @@ uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 component_pattern = r'\b[1-2][A-Z]{1,3}[0-9a-zA-Z\-]*\b'
 bracket_pattern = r'\((?:\d+(?:-\d+)?(?:,\s*\d+(?:-\d+)?)*)\)'
 
+# Perform OCR using Azure
+def perform_azure_ocr(image_stream, client):
+    read_response = client.read_in_stream(image_stream, raw=True)
+    operation_location = read_response.headers["Operation-Location"]
+    operation_id = operation_location.split("/")[-1]
+
+    # Wait for OCR result
+    while True:
+        result = client.get_read_result(operation_id)
+        if result.status not in ['notStarted', 'running']:
+            break
+        time.sleep(1)
+
+    extracted_text = ""
+    if result.status == 'succeeded':
+        for page in result.analyze_result.read_results:
+            for line in page.lines:
+                extracted_text += line.text + "\n"
+    return extracted_text
+
 def extract_component_with_levels(text):
     pairs = []
     tokens = re.findall(rf'{component_pattern}|{bracket_pattern}', text)
@@ -218,10 +245,21 @@ def extract_text(file, method):
         doc = fitz.open(stream=file.read(), filetype="pdf")
         for page in doc:
             text += page.get_text()
-    elif method == "Tesseract OCR":
+    #elif method == "Tesseract OCR":
+     #   images = convert_from_bytes(file.read())
+      #  for img in images:
+       #     text += pytesseract.image_to_string(img)
+    elif method == "Azure OCR":
+        AZURE_ENDPOINT = st.secrets["azure"]["endpoint"]
+        AZURE_KEY = st.secrets["azure"]["key"]
+        client = init_azure_client(AZURE_ENDPOINT, AZURE_KEY)
+        
         images = convert_from_bytes(file.read())
         for img in images:
-            text += pytesseract.image_to_string(img)
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='PNG')
+            img_byte_arr.seek(0)
+            text += perform_azure_ocr(img_byte_arr, client)
     return text
 
 if uploaded_file:
