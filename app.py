@@ -6,7 +6,6 @@ import fitz  # PyMuPDF
 import pdfplumber
 from pdf2image import convert_from_bytes
 from PIL import Image
-import pytesseract
 import sqlite3
 import hashlib
 import secrets
@@ -253,7 +252,7 @@ def extract_text(file, method):
         AZURE_ENDPOINT = st.secrets["azure"]["endpoint"]
         AZURE_KEY = st.secrets["azure"]["key"]
         client = init_azure_client(AZURE_ENDPOINT, AZURE_KEY)
-        
+
         images = convert_from_bytes(file.read())
         for img in images:
             img_byte_arr = io.BytesIO()
@@ -272,7 +271,7 @@ if uploaded_file:
         st.error(f"Preview failed: {e}")
     uploaded_file.seek(0)
 
-    method = st.radio("Choose extraction method", ["pdfplumber", "PyMuPDF", "Tesseract OCR"])
+    method = st.radio("Choose extraction method", ["pdfplumber", "PyMuPDF", "Microsoft Azure OCR"])
     if method != st.session_state.rated_method:
         st.session_state.emoji_rating = 0
         st.session_state.feedback_type = None
