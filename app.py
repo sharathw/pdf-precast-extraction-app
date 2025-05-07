@@ -10,6 +10,10 @@ import sqlite3
 import hashlib
 import secrets
 import time
+import threading
+
+import requests
+import streamlit.components.v1 as components
 
 import json
 from google.cloud import vision
@@ -23,10 +27,26 @@ from msrest.authentication import CognitiveServicesCredentials
 from user_auth import init_user_db, authenticate_user, add_user
 from db_logger import init_db, log_event, get_user_logs
 
-import requests
-import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Prefab Parser for Singapore PPVC/Precast", layout="centered")
+
+#self pinging code to keep streamlit app always running
+def ping_app():
+    while True:
+        try:
+            # Replace with your app's URL
+            requests.get("https://prefabparser.streamlit.app")
+            time.sleep(300)  # Ping every 5 minutes
+        except:
+            time.sleep(300)  # Wait and retry if error
+
+# Start pinging in a separate thread
+if not hasattr(st, 'already_started_server'):
+    st.already_started_server = True
+    t = threading.Thread(target=ping_app)
+    t.daemon = True
+    t.start()
+
 
 # Initialize databases
 init_user_db()
