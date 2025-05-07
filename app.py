@@ -310,11 +310,6 @@ def extract_text(file, method):
         for page in doc:
             text += page.get_text()
     
-    #elif method == "Tesseract OCR":
-     #   images = convert_from_bytes(file.read())
-      #  for img in images:
-       #     text += pytesseract.image_to_string(img)
-    
     elif method == "OCR Space":
         images = convert_from_bytes(file.read(), dpi=300)
         for img in images:
