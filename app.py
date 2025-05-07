@@ -11,6 +11,12 @@ import hashlib
 import secrets
 import time
 
+import json
+from google.cloud import vision
+
+gcp_key = json.loads(st.secrets["gcp"]["key_json"])
+client = vision.ImageAnnotatorClient.from_service_account_info(gcp_key)
+
 from azure.cognitiveservices.vision.computervision import ComputerVisionClient
 from msrest.authentication import CognitiveServicesCredentials
 
@@ -237,6 +243,22 @@ def ocr_space_file(file, api_key, language='eng'):
         return ""
     return result["ParsedResults"][0]["ParsedText"]
 
+# perform OCR using Google Vision OCR
+def extract_text_google_vision(image):
+    from google.cloud.vision_v1 import types
+    import io
+
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
+
+    content = img_byte_arr.read()
+    image = types.Image(content=content)
+
+    response = client.text_detection(image=image)
+    texts = response.text_annotations
+    return texts[0].description if texts else ""
+
 def extract_component_with_levels(text):
     pairs = []
     tokens = re.findall(rf'{component_pattern}|{bracket_pattern}', text)
@@ -293,6 +315,11 @@ def extract_text(file, method):
             img_byte_arr.seek(0)
             text += perform_azure_ocr(img_byte_arr, client)
     
+    elif method == "Google Vision":
+        images = convert_from_bytes(file.read(), dpi=300)
+        for img in images:
+            text += extract_text_google_vision(img)
+    
     return text
 
 if uploaded_file:
@@ -305,7 +332,7 @@ if uploaded_file:
         st.error(f"Preview failed: {e}")
     uploaded_file.seek(0)
 
-    method = st.radio("Choose extraction method", ["pdfplumber", "PyMuPDF", "OCR Space", "Microsoft Azure OCR"])
+    method = st.radio("Choose extraction method", ["pdfplumber", "PyMuPDF", "OCR Space", "Microsoft Azure OCR", "Google Vision"])
     if method != st.session_state.rated_method:
         st.session_state.emoji_rating = 0
         st.session_state.feedback_type = None
