@@ -8,3 +8,4 @@ Pillow
 openpyxl
 bcrypt
 azure-cognitiveservices-vision-computervision
+google-cloud-vision
