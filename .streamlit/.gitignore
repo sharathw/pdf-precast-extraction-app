@@ -1,3 +1,0 @@
-# .gitignore
-.streamlit/secrets.toml
-.streamlit/gcp_key.json
