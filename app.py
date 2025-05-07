@@ -218,8 +218,6 @@ if st.session_state.user_role == "admin":
 
 # App for Users
 uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
-component_pattern = r'\b[1-2][A-Z]{1,3}[0-9a-zA-Z\-]*\b'
-bracket_pattern = r'\((?:\d+(?:-\d+)?(?:,\s*\d+(?:-\d+)?)*)\)'
 
 # Perform OCR using Azure
 def perform_azure_ocr(image_stream, client):
@@ -279,21 +277,61 @@ def extract_text_google_vision(image):
     texts = response.text_annotations
     return texts[0].description if texts else ""
 
+# def extract_component_with_levels(text):
+#    pairs = []
+#   tokens = re.findall(rf'{component_pattern}|{bracket_pattern}', text)
+#    current_component = None
+#    levels = []
+#    for token in tokens:
+#        if re.match(component_pattern, token):
+#            if current_component:
+#                pairs.append((current_component, ", ".join(levels) if levels else ""))
+#            current_component = token
+#            levels = []
+#        elif re.match(bracket_pattern, token):
+#            levels.append(token)
+#    if current_component:
+#        pairs.append((current_component, ", ".join(levels) if levels else ""))
+#    return pairs
+
+#Patterns using regex
+component_pattern = r'\b[1-2][A-Z]{1,3}[0-9a-zA-Z\-]*\b'
+bracket_pattern = r'\((?:\d+(?:-\d+)?(?:,\s*\d+(?:-\d+)?)*)\)'
+
+def count_levels(level_str):
+    level_str = level_str.strip("()")
+    total = 0
+    for part in level_str.split(","):
+        part = part.strip()
+        if "-" in part:
+            start, end = map(int, part.split("-"))
+            total += (end - start + 1)
+        elif part.isdigit():
+            total += 1
+    return total
+
 def extract_component_with_levels(text):
     pairs = []
     tokens = re.findall(rf'{component_pattern}|{bracket_pattern}', text)
     current_component = None
     levels = []
+
     for token in tokens:
         if re.match(component_pattern, token):
             if current_component:
-                pairs.append((current_component, ", ".join(levels) if levels else ""))
+                level_text = ", ".join(levels)
+                total_qty = sum(count_levels(lvl) for lvl in levels)
+                pairs.append((current_component, level_text, total_qty))
             current_component = token
             levels = []
         elif re.match(bracket_pattern, token):
             levels.append(token)
+
     if current_component:
-        pairs.append((current_component, ", ".join(levels) if levels else ""))
+        level_text = ", ".join(levels)
+        total_qty = sum(count_levels(lvl) for lvl in levels)
+        pairs.append((current_component, level_text, total_qty))
+
     return pairs
 
 def extract_text(file, method):
@@ -359,7 +397,7 @@ if uploaded_file:
             uploaded_file.seek(0)
             full_text = extract_text(uploaded_file, method)
             pairs = extract_component_with_levels(full_text)
-            df = pd.DataFrame(pairs, columns=["Component Code", "Level(s)"])
+            df = pd.DataFrame(pairs, columns=["Component Code", "Level(s)", "Component Quanity"])
             df = df.drop_duplicates().sort_values("Component Code").reset_index(drop=True)
             st.session_state.df = df
 
