@@ -123,6 +123,31 @@ def display_footer():
 # Login
 if not st.session_state.is_authenticated:
     st.title("Prefab Parser for Singapore PPVC/Precast")
+    with st.expander("ℹ️ What does this app do?"):
+        st.markdown("""
+                Welcome! This app shall automatic precast or PPVC component identification directly from your construction drawings.
+
+                Upload a PDF and choose from one of several advanced extraction methods.
+
+                **Example Component Code Format:** `1TD2aX-3`
+
+                Each part is decoded as:
+                - `1` or `2`: Piece / Precast Type: 1-precast standard Piece type or 2-Secondary/reinforced/specialized piece 
+                
+                - `TD`, `AC`, `TC`, etc.: Structural type: - A = Architectural panel - T = Top floor related - C = Corridor panel - D = Door/partition related - S = Slab - W = Wall
+                
+                - `2a`, `2bX`: Unit Type: building block, or design variant
+                
+                - `-3`: Piece sequence number (where it fits in that block)
+                
+                - `-CS` or `-E` or `-P` or `-M` or `-L`: Addiitonal Suffix: Special characteristics:- CS = Corner Section- E = End piece- P = Panel- M = Mirror (mirrored side)- L = Left Handed version    
+
+                The app detects level indicators like `(2, 4-6)` and calculates total quantities based on this.
+
+                🔍 Export extracted data to Excel, give confidence feedback, and store everything securely in a database.
+                
+                ---
+            """)
     st.text("🔐 Login or Register")
 
     tab1, tab2 = st.tabs(["Login", "Register"])
@@ -276,23 +301,6 @@ def extract_text_google_vision(image):
     response = client.text_detection(image=image)
     texts = response.text_annotations
     return texts[0].description if texts else ""
-
-# def extract_component_with_levels(text):
-#    pairs = []
-#   tokens = re.findall(rf'{component_pattern}|{bracket_pattern}', text)
-#    current_component = None
-#    levels = []
-#    for token in tokens:
-#        if re.match(component_pattern, token):
-#            if current_component:
-#                pairs.append((current_component, ", ".join(levels) if levels else ""))
-#            current_component = token
-#            levels = []
-#        elif re.match(bracket_pattern, token):
-#            levels.append(token)
-#    if current_component:
-#        pairs.append((current_component, ", ".join(levels) if levels else ""))
-#    return pairs
 
 #Patterns using regex
 component_pattern = r'\b[1-2][A-Z]{1,3}[0-9a-zA-Z\-]*\b'
