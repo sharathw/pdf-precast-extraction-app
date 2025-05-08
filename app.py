@@ -28,14 +28,14 @@ from user_auth import init_user_db, authenticate_user, add_user
 from db_logger import init_db, log_event, get_user_logs
 
 
-st.set_page_config(page_title="Prefab Parser for Singapore PPVC/Precast", layout="centered")
+st.set_page_config(page_title="Precast Parser for Singapore PPVC/Precast", layout="centered")
 
 #self pinging code to keep streamlit app always running
 def ping_app():
     while True:
         try:
             # Replace with your app's URL
-            requests.get("https://prefabparser.streamlit.app")
+            requests.get("https://precastparser.streamlit.app")
             time.sleep(300)  # Ping every 5 minutes
         except:
             time.sleep(300)  # Wait and retry if error
@@ -123,7 +123,7 @@ def display_footer():
 
 # Login
 if not st.session_state.is_authenticated:
-    st.title("Prefab Parser for Singapore PPVC/Precast")
+    st.title("Precast Parser for Singapore PPVC/Precast")
     with st.expander("ℹ️ What does this app do?"):
         st.markdown("""
                 Welcome! This app shall automatic precast or PPVC component identification directly from your construction drawings.
